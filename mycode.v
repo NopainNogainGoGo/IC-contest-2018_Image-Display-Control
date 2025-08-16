@@ -1,6 +1,6 @@
 module LCD_CTRL(
 input               clk,
-input               reset, //in fact 都是negedge
+input               reset, 
 input [3:0]         cmd,
 input               cmd_valid,
 input [7:0]         IROM_Q,
@@ -528,126 +528,8 @@ always@(posedge clk or posedge reset)begin
 end
 
 endmodule
+*/
 
 
 
-
-
-
-
-/*
-能用 == 就不要用 > <
-在硬體中，一個比較器 (>) 的實現原理通常是一個減法器。
-要判斷 A > B，電路會計算 A - B，然後根據結果的符號位 (Sign bit) 和是否為零來判斷。
-一個 N-bit 的比較器，其實就需要一個 N-bit 的減法器（或加法器）的邏輯。
-
-相等比較 (==, !=)：成本低很多。判斷 A == B 只需要對每一位做 XOR 運算，再把所有結果 AND 起來。這比加法器用的邏輯單元少得多。
-
-ㄎ
-
-看清楚spec 不是所有 signal 都要 reset!! 尤其是 combinational
-
-要馬上反應的訊號要寫成combinational
-sequential 會是下個 cycle 才更新
-
-
-DC compiler在編譯上不接受同個暫存器在不同ALWAYS BLOCK裡附值
-也就是不能在不同 sequential always block 更改同一個訊號
-硬體對應：每個 always @(posedge clk) block 最終都會產生一組 flip‑flop 或 latch
-如果在兩個不同的觸發器上都連到同一條線，就等於硬體上有兩個不同的輸出同時嘗試驅動同一條線，會互相衝突。
-解決方式: 把所有對那個 register（或陣列）的寫入，都集中到同一個 always block，然後在裡面用 if / case 來區分不同情況
-
-
-RTL中很少使用 for 迴圈(通常都用在 testbench)
-其原因是，for 迴圈會被DC展開為所有變數情況，每個變數獨立佔用暫存器資源
-且每條執行語句並不能有效地重複使用硬體邏輯資源，而這樣的情況會造成消耗大量硬體資源
-迴圈次數越多次，整體合成面積會越大，for 迴圈雖然方便，但換來的則是速度上的下降
-
-
-RESET
-ASIC 製造後，晶片上各個 flip‑flop 的初始狀態是不確定的（POWER‑ON 時的值可能是 0、1 或 X），
-因此必須在設計中加一條全域的同步 reset，保證所有狀態機、指標、計數器、FIFO 等元件都能回到已知的「乾淨」狀態。
-同步 reset 也方便在測試模式下把 D‑flip‑flop 重置，並進行 scan chain 的掃描與邏輯 BIST。
-許多 FPGA 平台（如 Xilinx、Intel FPGA）在上電時就已經內建一個 Power‑On Reset，能自動把所有寄存器清為 0。
-在此基礎上，並不一定要在每個同步單元前加 explicit reset。
-
-
-X unknown 的情況有很多種，有可能是一開始沒有reset，或者沒有給初始值，如果遇到這種情況要一層一層去推問題在哪裡，因為假設一開始訊號線就是X的情況下
-你拿X的值去assign給別條線，那被assign的訊號線也會是X，所以要一層一層推回去看是哪邊出了問題．
-
-
-合併寫法:
-優點：
-同步控制所有輸出訊號：不會有跨 always 的競爭問題，綜合結果更穩定。
-硬體架構較一致，通常會導致更少的邏輯資源消耗。
-對於小型 FSM 輸出控制非常適合。
-
-缺點：
-可讀性較差（當輸出訊號變多時，case 塊會變很長）。
-可維護性下降，如果有些訊號的控制邏輯獨立，會導致 case 裡不斷重複設定無關訊號。
-
-always@(*)
-begin
-    case(state_cs)
-        READ:
-        begin
-            IROM_rd    = 1'd1;
-            IRAM_valid = 1'd0;
-            busy       = 1'd1;
-        end
-        IDLE_CMD:
-        begin
-            IROM_rd    = 1'd0;
-            IRAM_valid = 1'd0;
-            busy       = 1'd0;
-        end
-        CALC:
-        begin
-            IROM_rd    = 1'd0;
-            IRAM_valid = 1'd0;
-            busy       = 1'd1;
-        end
-        WRITE:
-        begin
-            IROM_rd    = 1'd0;
-            IRAM_valid = 1'd1;
-            busy       = 1'd1;
-        end
-    endcase
-end
-
-
-
-
-分開寫:
-優點：
-邏輯分離清楚、模組化：每一段只負責控制一個訊號，便於 debug 與個別變動。
-彈性高：若之後 busy 的邏輯要加 reset 或其他 flag，可以獨立調整。
-
-缺點：
-若 IROM_rd、IRAM_valid 的值被 busy 使用，有可能會造成 推論錯誤或不穩定（因為 IROM_rd 和 IRAM_valid 還沒被正確計算就被 busy 使用）。
-硬體綜合時不易預測邏輯結構，可能導致電路資源使用變多。
-
-always @(*) begin 
-    if (state == READ) //盡量用flag 去控制
-        IROM_rd = 1;
-    else 
-        IROM_rd = 0;
-end
-
-always @(*) begin
-    if (state == WRITE) 
-        IRAM_valid = 1;
-    else 
-        IRAM_valid = 0;
-end
-
-always @(*) begin
-    if (reset)
-        busy = 1'b1;
-    else if (IROM_rd || IRAM_valid || state == CALC)
-        busy = 1'b1;
-    else 
-        busy = 1'b0;
-end
 */

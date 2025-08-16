@@ -81,5 +81,3 @@ The module is controlled through a **command interface** and managed by a **fini
   * Simplified **arithmetic for max/min/avg**.
 
 ---
-
-Do you want me to make this README **more technical** (e.g., with timing diagrams and pseudocode for FSM transitions), or keep it **concise and beginner-friendly**?

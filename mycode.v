@@ -285,7 +285,7 @@ endmodule
 優化版
 module LCD_CTRL(
 input               clk,
-input               reset, //in fact 都是negedge
+input               reset,
 input [3:0]         cmd,
 input               cmd_valid,
 input [7:0]         IROM_Q,
@@ -530,6 +530,3 @@ end
 endmodule
 */
 
-
-
-*/
